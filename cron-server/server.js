@@ -106,16 +106,24 @@ async function fetchAndCacheOdds() {
     }
 
     // Step 2: Fetch odds for each event
+    // IMPORTANT: This list MUST match oddsCacheService.ts to ensure consistency
+    // Include _alternate markets for different lines
     const markets = [
       "h2h",
       "totals",
       "player_shots_on_goal",
+      "player_shots_on_goal_alternate",
       "player_goals",
+      "player_goals_alternate",
       "player_assists",
+      "player_assists_alternate",
       "player_points",
+      "player_points_alternate",
       "player_goal_scorer_anytime",
       "player_goal_scorer_first",
     ].join(",");
+    
+    console.log(`[odds-fetch] Fetching markets: ${markets}`);
 
     const results = [];
     const errors = [];
@@ -155,17 +163,8 @@ async function fetchAndCacheOdds() {
           ? oddsData.bookmakers
           : [];
 
-        // Organize odds by market
-        const marketData = {
-          h2h: [],
-          totals: [],
-          player_shots_on_goal: [],
-          player_goals: [],
-          player_assists: [],
-          player_points: [],
-          player_goal_scorer_anytime: [],
-          player_goal_scorer_first: [],
-        };
+        // Organize odds by market - dynamically capture ALL markets
+        const marketData = {};
 
         for (const bookmaker of bookmakers) {
           const bookmakerKey = String(bookmaker.key || bookmaker.title || "unknown");
@@ -177,7 +176,22 @@ async function fetchAndCacheOdds() {
             const marketKey = String(market.key || "");
             const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
 
+            // Initialize market array if it doesn't exist
+            if (!marketData[marketKey]) {
+              marketData[marketKey] = [];
+            }
+
             for (const outcome of outcomes) {
+              // Log first player prop outcome to verify data structure
+              if (marketKey.includes("player") && marketData[marketKey].length === 0) {
+                console.log(`[odds-fetch] Sample ${marketKey} outcome from Odds API:`, {
+                  name: outcome.name,
+                  description: outcome.description,
+                  price: outcome.price,
+                  point: outcome.point,
+                });
+              }
+
               const entry = {
                 bookmaker: bookmakerKey,
                 selection: String(outcome.name || ""),
@@ -187,9 +201,12 @@ async function fetchAndCacheOdds() {
                 lastUpdated: String(market.last_update || ""),
               };
 
-              if (marketData[marketKey]) {
-                marketData[marketKey].push(entry);
+              // Log what we're storing for first player prop
+              if (marketKey.includes("player") && marketData[marketKey].length === 0) {
+                console.log(`[odds-fetch] Storing in Firebase:`, entry);
               }
+
+              marketData[marketKey].push(entry);
             }
           }
         }
